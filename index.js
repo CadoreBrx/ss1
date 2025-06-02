@@ -7,7 +7,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const redis = require('redis');
-const fs =require('fs');
+const fs = require('fs');
 const { default: OpenAI } = require('openai');
 const axios = require('axios');
 
@@ -506,8 +506,11 @@ async function startBot() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState('./auth_info_brutus');
         const sock = makeWASocket({
-            auth: state, printQRInTerminal: true, defaultQueryTimeoutMs: 60000, 
-            syncFullHistory: false, qrTimeout: 45000, 
+            auth: state, 
+            // printQRInTerminal: true, // Opção obsoleta, removida
+            defaultQueryTimeoutMs: 60000, 
+            syncFullHistory: false, 
+            qrTimeout: 45000, 
             browser: [`${NOME_RESTAURANTE} Bot (Facility.Ai)`, 'Chrome', '1.0.0'],
             logger: require('pino')({ level: 'warn' })
         });
@@ -516,7 +519,13 @@ async function startBot() {
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
-            if (qr) { console.log('🔗 QR Code Recebido, escaneie com o WhatsApp Web no celular que será o bot.'); }
+            if (qr) { 
+                console.log('🔗 QR Code Recebido. Escaneie abaixo com o WhatsApp no seu celular:');
+                const qrcodeTerminal = require('qrcode-terminal'); // Importa aqui para garantir que só é chamado se necessário
+                qrcodeTerminal.generate(qr, { small: true }, function (qrString) {
+                    console.log(qrString);
+                });
+            }
             if (connection === 'close') {
                 const statusCode = (lastDisconnect?.error)?.output?.statusCode;
                 const shouldReconnect = 
@@ -573,7 +582,7 @@ async function startBot() {
 
                 if (!fromMe || senderIsAdmin) {
                     const ownerSnoozeActive = await redisClient.get(`snooze_owner:${remoteJid}`);
-                    let textForAdminCheck = getMessageText(msg.message).trim().toLowerCase(); // Pega o texto aqui para checagem do admin
+                    let textForAdminCheck = getMessageText(msg.message).trim().toLowerCase();
                     if (ownerSnoozeActive && !(senderIsAdmin && textForAdminCheck.startsWith("bot:"))) { 
                         console.log(`[${remoteJid}] Chat em MODO SONECA DO PROPRIETÁRIO. Mensagem de ${msg.key.participant || remoteJid} ignorada.`);
                         if (!fromMe) await sock.readMessages([msg.key]);
