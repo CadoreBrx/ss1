@@ -1,42 +1,33 @@
 {
   "name": "facility-ai-whatsapp-chatbot",
   "version": "1.0.0",
-  "description": "Sistema de chatbot conversacional para WhatsApp com Inteligência Artificial, projetado para automação de atendimento e integração de dados via API.",
+  "description": "Bot do WhatsApp para atendimento do Brutus Burguer com IA",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "echo \"Nenhum passo de build configurado para este projeto.\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "whatsapp",
     "bot",
-    "chatbot",
     "baileys",
     "openai",
-    "gpt",
     "redis",
-    "axios",
-    "facility-ai",
-    "ia",
-    "automação",
-    "atendimento"
+    "nodejs"
   ],
-  "author": "Facility Ai",
+  "author": "Facility.Ai",
   "license": "ISC",
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.2",
+    "@whiskeysockets/baileys": "^6.7.5",
     "axios": "^1.7.2",
     "dotenv": "^16.4.5",
-    "openai": "^4.52.0",
-    "pino": "^9.2.0",
+    "openai": "^4.47.3",
+    "pino": "^9.1.0",
+    "qrcode-terminal": "^0.12.0",
     "redis": "^4.6.14"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "nodemon": "^3.1.0"
   }
 }
