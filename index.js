@@ -5,7 +5,7 @@ const {
     DisconnectReason,
     downloadMediaMessage
 } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal'); // Para exibir o QR Code no terminal
+const qrcode = require('qrcode-terminal');
 const redis = require('redis');
 const fs = require('fs');
 const { default: OpenAI } = require('openai');
@@ -13,11 +13,11 @@ const axios = require('axios');
 
 // 🔹 Configurações Gerais
 const CHATGPT_API_KEY = process.env.CHATGPT_API_KEY;
-const ADMIN_PHONE_NUMBER = process.env.ADMIN_PHONE_NUMBER; // Ex: 5547999998888
+const ADMIN_PHONE_NUMBER = process.env.ADMIN_PHONE_NUMBER;
 const ORDER_API_URL = process.env.ORDER_API_URL || 'https://apibrutussantarita.facilityai.com.br/new_order.php';
 const REDIS_HOST = process.env.REDIS_HOST || '127.0.0.1';
 const REDIS_PORT = process.env.REDIS_PORT || 6379;
-const OWNER_SNOOZE_DURATION_SECONDS = 3600; // 1 hora
+const OWNER_SNOOZE_DURATION_SECONDS = 3600;
 
 if (!CHATGPT_API_KEY) {
     console.error("❌ CHATGPT_API_KEY não está definida no .env! Funcionalidades de IA estarão desabilitadas.");
@@ -27,7 +27,6 @@ if (!ADMIN_PHONE_NUMBER) {
 }
 console.info(`[CONFIG] Bot usará a API de Pedidos em: ${ORDER_API_URL}`);
 console.info(`[CONFIG] Conectando ao Redis em: ${REDIS_HOST}:${REDIS_PORT}`);
-
 
 // =================================================================
 // 🔹 CÉREBRO DO RESTAURANTE (PROMPT DO BRUTUS BURGUER) 🔹
@@ -355,7 +354,7 @@ async function extractItemsAndPricesFromText(text) {
 
 const EXPIRATION_TIME_SECONDS = 3 * 3600;
 async function getUserData(remoteJid) { if (!redisClient.isOpen) { console.warn(`⚠️ [REDIS_WARN] Tentativa de buscar dados do usuário ${remoteJid} mas Redis não está conectado.`); return { state: 'idle', cart: [], address: null, bairro: null, deliveryFee: 0, paymentMethod: null, changeFor: null, orderType: null, lastBotMessage: null, lastClientMessage: null }; } try { const dataJson = await redisClient.get(`user:${remoteJid}`); if (dataJson) { return JSON.parse(dataJson); } } catch (e) { console.error(`❌ [REDIS_ERROR] Erro ao buscar dados do usuário ${remoteJid} no Redis:`, e.message); } return { state: 'idle', cart: [], address: null, bairro: null, deliveryFee: 0, paymentMethod: null, changeFor: null, orderType: null, lastBotMessage: null, lastClientMessage: null }; }
-async function setUserData(remoteJid, data) { if (!redisClient.isOpen) { console.warn(`⚠️ [REDIS_WARN] Tentativa de salvar dados do usuário ${remoteJid} mas Redis não está conectado.`); return; } try { await redisClient.set(`user:${remoteJid}`, JSON.stringify(data), { EX: EXPIRATION_TIME_SECONDS }); console.info(`[USER_DATA_SAVED] Dados salvos para ${remoteJid}: State=${data.state}, Itens no Carrinho=${data.cart.length}`);} catch (e) { console.error(`❌ [REDIS_ERROR] Erro ao salvar dados do usuário ${remoteJid} no Redis:`, e.message); } }
+async function setUserData(remoteJid, data) { if (!redisClient.isOpen) { console.warn(`⚠️ [REDIS_WARN] Tentativa de salvar dados do usuário ${remoteJid} mas Redis não está conectado.`); return; } try { await redisClient.set(`user:${remoteJid}`, JSON.stringify(data), { EX: EXPIRATION_TIME_SECONDS }); console.info(`[USER_DATA_SAVED] Dados salvos para ${remoteJid}: State=${data.state}, Itens no Carrinho=${data.cart ? data.cart.length : 0}`);} catch (e) { console.error(`❌ [REDIS_ERROR] Erro ao salvar dados do usuário ${remoteJid} no Redis:`, e.message); } }
 async function clearUserData(remoteJid) { if (!redisClient.isOpen) { console.warn(`⚠️ [REDIS_WARN] Tentativa de limpar dados do usuário ${remoteJid} mas Redis não está conectado.`); return; } try { await redisClient.del(`user:${remoteJid}`); console.info(`[USER_DATA_CLEARED] Dados limpos para ${remoteJid}`); } catch (e) { console.error(`❌ [REDIS_ERROR] Erro ao limpar dados do usuário ${remoteJid} no Redis:`, e.message); } }
 function formatCartForDisplay(cart) { if (!cart || cart.length === 0) return { message: 'Seu carrinho está vazio.', subtotal: 0 }; let message = ''; let subtotal = 0; cart.forEach(item => { const itemPrice = parseFloat(item.preco_unitario) || 0; const itemQuantity = parseInt(item.quantidade) || 1; const itemTotal = itemPrice * itemQuantity; message += `*${itemQuantity}x* ${item.item} - R$ ${itemTotal.toFixed(2)}\n`; subtotal += itemTotal; }); message += `\n*Subtotal dos Itens:* R$ ${subtotal.toFixed(2)}`; return { message, subtotal }; }
 
@@ -391,24 +390,24 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                     userData.cart.push(...initialItems);
                     userData.state = 'coletando_itens';
                     const { subtotal } = formatCartForDisplay(userData.cart);
-                    aiInstruction = `Carlos, o cliente (${remoteJid}) iniciou um pedido com: ${initialItems.map(i => `${i.quantidade}x ${i.item}`).join(', ')}. O subtotal é R$ ${subtotal.toFixed(2)}. Confirme os itens amigavelmente e pergunte se deseja algo mais ou prosseguir.`;
+                    aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) iniciou um pedido com: ${initialItems.map(i => `${i.quantidade}x ${i.item}`).join(', ')}. O subtotal é R$ ${subtotal.toFixed(2)}. Confirme os itens amigavelmente e pergunte se deseja algo mais ou prosseguir.`;
                 } else {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Nenhum item inicial detectado. Verificando intenção geral.`);
                     switch (generalIntent.toUpperCase()) {
                         case 'INICIAR_PEDIDO_SEM_ITENS': case 'INICIAR_PEDIDO_COM_ITENS':
                             console.info(`[FLOW_LOGIC] User: ${remoteJid}, Intenção de iniciar pedido. Mudando estado para 'coletando_itens'.`);
                             userData.state = 'coletando_itens';
-                            aiInstruction = `Carlos, o cliente (${remoteJid}) quer fazer um pedido. Use sua saudação "Oiee, tudo bem? bem vindo ao Brutus" e pergunte o que ele gostaria de pedir.`;
+                            aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) quer fazer um pedido. Use sua saudação "Oiee, tudo bem? bem vindo ao Brutus" e pergunte o que ele gostaria de pedir.`;
                             break;
                         case 'VER_CARDAPIO':
                             console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou cardápio.`);
                             carlosResponse = 'Você pode conferir nosso cardápio completo neste link: https://abrir.link/cardapiobrutus\nDepois é só me dizer por aqui o que vai querer! 😉';
                             break;
-                        case 'VER_HORARIO': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou horário.`); aiInstruction = `Carlos, o cliente (${remoteJid}) perguntou sobre o horário de funcionamento. Responda com base no seu conhecimento.`; break;
-                        case 'INFO_ENTREGA': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou info de entrega.`); aiInstruction = `Carlos, o cliente (${remoteJid}) perguntou sobre as taxas ou áreas de entrega. Responda com base no seu conhecimento.`; break;
-                        case 'INFO_DEMORA_ENTREGA': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou info de demora.`); aiInstruction = `Carlos, o cliente (${remoteJid}) perguntou sobre a demora da entrega ou se o pedido já está vindo. Use a frase específica do prompt para responder sobre a alta demanda e o tempo de verificação.`; break;
-                        case 'SAUDACAO': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Saudação recebida.`); aiInstruction = `Carlos, o cliente (${remoteJid}) disse: "${text}". Responda à saudação de forma amigável como faria no ${NOME_RESTAURANTE}.`; break;
-                        default: console.info(`[FLOW_LOGIC] User: ${remoteJid}, Pergunta/intenção geral: ${generalIntent}.`); aiInstruction = `Carlos, o cliente (${remoteJid}) disse: "${text}". A intenção parece ser ${generalIntent}. Responda de forma atenciosa e prestativa como faria no ${NOME_RESTAURANTE}.`; break;
+                        case 'VER_HORARIO': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou horário.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) perguntou sobre o horário de funcionamento. Responda com base no seu conhecimento.`; break;
+                        case 'INFO_ENTREGA': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou info de entrega.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) perguntou sobre as taxas ou áreas de entrega. Responda com base no seu conhecimento.`; break;
+                        case 'INFO_DEMORA_ENTREGA': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou info de demora.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) perguntou sobre a demora da entrega ou se o pedido já está vindo. Use a frase específica do prompt para responder sobre a alta demanda e o tempo de verificação.`; break;
+                        case 'SAUDACAO': console.info(`[FLOW_LOGIC] User: ${remoteJid}, Saudação recebida.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) disse: "${text}". Responda à saudação de forma amigável como faria no ${NOME_RESTAURANTE}.`; break;
+                        default: console.info(`[FLOW_LOGIC] User: ${remoteJid}, Pergunta/intenção geral: ${generalIntent}.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) disse: "${text}". A intenção parece ser ${generalIntent}. Responda de forma atenciosa e prestativa como faria no ${NOME_RESTAURANTE}.`; break;
                     }
                 }
                 break;
@@ -416,20 +415,20 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
             case 'coletando_itens':
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'coletando_itens'.`);
                 if (generalIntent.toUpperCase() === 'FINALIZAR_ITENS') {
-                    if (userData.cart.length === 0) { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Tentou finalizar com carrinho vazio.`); aiInstruction = `Carlos, o cliente (${remoteJid}) quer finalizar, mas o carrinho está vazio. Pergunte se ele gostaria de adicionar algo antes.`; }
-                    else { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Finalizando itens. Mudando estado para 'aguardando_tipo_pedido'.`); userData.state = 'aguardando_tipo_pedido'; aiInstruction = `Carlos, o cliente (${remoteJid}) indicou que não quer mais itens. Pergunte se o pedido será para entrega ou para retirada.`; }
+                    if (userData.cart.length === 0) { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Tentou finalizar com carrinho vazio.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) quer finalizar, mas o carrinho está vazio. Pergunte se ele gostaria de adicionar algo antes.`; }
+                    else { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Finalizando itens. Mudando estado para 'aguardando_tipo_pedido'.`); userData.state = 'aguardando_tipo_pedido'; aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) indicou que não quer mais itens. Pergunte se o pedido será para entrega ou para retirada.`; }
                 } else if (generalIntent.toUpperCase() === 'CANCELAR_PEDIDO_OU_ITEM') {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou cancelamento.`);
                     await clearUserData(remoteJid); userData = await getUserData(remoteJid);
-                    aiInstruction = `Carlos, o cliente (${remoteJid}) pediu para cancelar o pedido. Confirme o cancelamento e diga que ele pode iniciar um novo quando quiser.`;
+                    aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) pediu para cancelar o pedido. Confirme o cancelamento e diga que ele pode iniciar um novo quando quiser.`;
                 } else if (generalIntent.toUpperCase() === 'VER_CARDAPIO') {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Solicitou cardápio durante coleta.`);
                      carlosResponse = 'Claro! Nosso cardápio está aqui: https://abrir.link/cardapiobrutus\nMe diga o que mais te agrada! 😉';
                 } else { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Processando texto para adicionar/modificar itens.`);
                     const additionalItems = await extractItemsAndPricesFromText(text);
-                    if (additionalItems.length > 0) { userData.cart.push(...additionalItems); const { subtotal } = formatCartForDisplay(userData.cart); console.info(`[FLOW_LOGIC] User: ${remoteJid}, Itens adicionados. Subtotal: R$ ${subtotal.toFixed(2)}`); aiInstruction = `Carlos, adicionei ${additionalItems.map(i => `${i.quantidade}x ${i.item}`).join(', ')} ao pedido do cliente (${remoteJid}). O subtotal atual é R$ ${subtotal.toFixed(2)}. Confirme e pergunte se deseja algo mais ou prosseguir.`; }
-                    else { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Nenhum item novo extraído. Pode ser pergunta.`); aiInstruction = `Carlos, o cliente (${remoteJid}) disse "${text}" enquanto montava o pedido. Se não for um item novo do cardápio, responda à pergunta dele de forma útil. Se ele parecer confuso, lembre-o que pode pedir o cardápio ou finalizar o pedido.`; }
+                    if (additionalItems.length > 0) { userData.cart.push(...additionalItems); const { subtotal } = formatCartForDisplay(userData.cart); console.info(`[FLOW_LOGIC] User: ${remoteJid}, Itens adicionados. Subtotal: R$ ${subtotal.toFixed(2)}`); aiInstruction = `Carlos, adicionei ${additionalItems.map(i => `${i.quantidade}x ${i.item}`).join(', ')} ao pedido do cliente (${remoteJid.split('@')[0]}). O subtotal atual é R$ ${subtotal.toFixed(2)}. Confirme e pergunte se deseja algo mais ou prosseguir.`; }
+                    else { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Nenhum item novo extraído. Pode ser pergunta.`); aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) disse "${text}" enquanto montava o pedido. Se não for um item novo do cardápio, responda à pergunta dele de forma útil. Se ele parecer confuso, lembre-o que pode pedir o cardápio ou finalizar o pedido.`; }
                 }
                 break;
 
@@ -438,15 +437,15 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                 if (generalIntent.toUpperCase() === 'ESCOLHER_ENTREGA' || text.toLowerCase().includes('entrega')) {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu ENTREGA. Mudando estado para 'aguardando_endereco'.`);
                     userData.orderType = 'delivery'; userData.state = 'aguardando_endereco';
-                    aiInstruction = `Carlos, cliente (${remoteJid}) escolheu entrega. Use a frase EXATA do seu prompt de conhecimento para solicitar o endereço completo: "Beleza! Vai ser pra entrega! Pode me passar o seu endereço completo, por favor? Incluindo a rua, número da casa, bairro e uma referência se possível. SEMPRE PRECISA TER O NOME DA RUA E NUMERO DA CASA E CONFIRMAR O BAIRRO".`;
+                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu entrega. Use a frase EXATA do seu prompt de conhecimento para solicitar o endereço completo: "Beleza! Vai ser pra entrega! Pode me passar o seu endereço completo, por favor? Incluindo a rua, número da casa, bairro e uma referência se possível. SEMPRE PRECISA TER O NOME DA RUA E NUMERO DA CASA E CONFIRMAR O BAIRRO".`;
                 } else if (generalIntent.toUpperCase() === 'ESCOLHER_RETIRADA' || text.toLowerCase().includes('retirada')) {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu RETIRADA. Mudando estado para 'aguardando_forma_pagamento'.`);
                     userData.orderType = 'pickup'; userData.state = 'aguardando_forma_pagamento';
                     const { subtotal } = formatCartForDisplay(userData.cart);
-                    aiInstruction = `Carlos, cliente (${remoteJid}) escolheu retirada. Use a frase do seu prompt de conhecimento: "Beleza, será pra retirada! O pedido vai ficar pronto em 15 minutos." Em seguida, pergunte qual será a forma de pagamento. O subtotal é R$ ${subtotal.toFixed(2)}.`;
+                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu retirada. Use a frase do seu prompt de conhecimento: "Beleza, será pra retirada! O pedido vai ficar pronto em 15 minutos." Em seguida, pergunte qual será a forma de pagamento. O subtotal é R$ ${subtotal.toFixed(2)}.`;
                 } else { 
                     console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Tipo de pedido não entendido: "${text}".`);
-                    aiInstruction = `Carlos, não entendi se o pedido do cliente (${remoteJid}) é para entrega ou retirada. Poderia perguntar novamente de forma clara?`; 
+                    aiInstruction = `Carlos, não entendi se o pedido do cliente (${remoteJid.split('@')[0]}) é para entrega ou retirada. Poderia perguntar novamente de forma clara?`; 
                 }
                 break;
 
@@ -457,16 +456,16 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                 for (const key of Object.keys(deliveryFeesBrutus)) { const keyWords = key.split(' '); if (keyWords.every(kw => palavrasEndereco.includes(kw))) { bairroCliente = key; break; } }
                 if (!bairroCliente) { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Bairro não detectado por keywords. Consultando IA.`);
-                    const bairroExtraidoIA = await askAI(`O cliente (${remoteJid}) disse que o endereço é: "${text}". Analise e retorne APENAS O NOME DO BAIRRO de forma concisa. Se não houver bairro claro, responda 'NAO_IDENTIFICADO'.`, systemPrompt, 0.1); 
+                    const bairroExtraidoIA = await askAI(`O cliente (${remoteJid.split('@')[0]}) disse que o endereço é: "${text}". Analise e retorne APENAS O NOME DO BAIRRO de forma concisa. Se não houver bairro claro, responda 'NAO_IDENTIFICADO'.`, systemPrompt, 0.1); 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Bairro extraído pela IA: "${bairroExtraidoIA}"`);
                     if (bairroExtraidoIA.toUpperCase() !== 'NAO_IDENTIFICADO' && bairroExtraidoIA.length < 30) { const lowerBairroIA = bairroExtraidoIA.toLowerCase().trim(); const matchedKey = Object.keys(deliveryFeesBrutus).find(k => k === lowerBairroIA || lowerBairroIA.includes(k) || k.includes(lowerBairroIA)); if(matchedKey) bairroCliente = matchedKey; else bairroCliente = lowerBairroIA; } 
                 }
                 if (bairroCliente && deliveryFeesBrutus.hasOwnProperty(bairroCliente.toLowerCase())) { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Bairro '${bairroCliente}' encontrado com taxa. Mudando estado para 'aguardando_forma_pagamento'.`);
-                    userData.bairro = bairroCliente.toLowerCase(); userData.deliveryFee = deliveryFeesBrutus[userData.bairro]; userData.state = 'aguardando_forma_pagamento'; const { subtotal } = formatCartForDisplay(userData.cart); const totalComTaxa = subtotal + userData.deliveryFee; aiInstruction = `Carlos, o endereço do cliente (${remoteJid}) é "${userData.address}" (bairro detectado: ${userData.bairro}). A taxa de entrega é R$ ${userData.deliveryFee.toFixed(2)}. O subtotal dos itens é R$ ${subtotal.toFixed(2)}, totalizando R$ ${totalComTaxa.toFixed(2)}. Use a frase do seu prompt de conhecimento: "...Agora que tenho o bairro, vou calcular o valor total. O pedido ficou em R$ ${subtotal.toFixed(2)} + R$ ${userData.deliveryFee.toFixed(2)}, correto?" e depois pergunte "E qual vai ser a forma de pagamento?".`; 
+                    userData.bairro = bairroCliente.toLowerCase(); userData.deliveryFee = deliveryFeesBrutus[userData.bairro]; userData.state = 'aguardando_forma_pagamento'; const { subtotal } = formatCartForDisplay(userData.cart); const totalComTaxa = subtotal + userData.deliveryFee; aiInstruction = `Carlos, o endereço do cliente (${remoteJid.split('@')[0]}) é "${userData.address}" (bairro detectado: ${userData.bairro}). A taxa de entrega é R$ ${userData.deliveryFee.toFixed(2)}. O subtotal dos itens é R$ ${subtotal.toFixed(2)}, totalizando R$ ${totalComTaxa.toFixed(2)}. Use a frase do seu prompt de conhecimento: "...Agora que tenho o bairro, vou calcular o valor total. O pedido ficou em R$ ${subtotal.toFixed(2)} + R$ ${userData.deliveryFee.toFixed(2)}, correto?" e depois pergunte "E qual vai ser a forma de pagamento?".`; 
                 } else { 
                     console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Bairro '${bairroCliente || text}' não encontrado ou taxa não definida. Mudando estado para 'aguardando_bairro_clarificacao'.`);
-                    userData.state = 'aguardando_bairro_clarificacao'; aiInstruction = `Carlos, o cliente (${remoteJid}) forneceu o endereço "${text}". Para calcular a taxa de entrega, preciso do bairro. Use a frase do seu prompt: "(caso o bairro não tenha sido informado): Você esqueceu de informar o bairro. Qual é o seu bairro?" ou, se um bairro foi parcialmente detectado ("${bairroCliente || 'nenhum bairro específico entendido'}"), peça para ele confirmar ou corrigir.`; 
+                    userData.state = 'aguardando_bairro_clarificacao'; aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) forneceu o endereço "${text}". Para calcular a taxa de entrega, preciso do bairro. Use a frase do seu prompt: "(caso o bairro não tenha sido informado): Você esqueceu de informar o bairro. Qual é o seu bairro?" ou, se um bairro foi parcialmente detectado ("${bairroCliente || 'nenhum bairro específico entendido'}"), peça para ele confirmar ou corrigir.`; 
                 }
                 break;
 
@@ -476,10 +475,10 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                 let matchedKeyBairro = Object.keys(deliveryFeesBrutus).find( k => bairroInput.includes(k) || k.includes(bairroInput) || k.replace(/[áàâãä]/gi,"a").replace(/[éèêë]/gi,"e").replace(/[íìîï]/gi,"i").replace(/[óòôõö]/gi,"o").replace(/[úùûü]/gi,"u").includes(bairroInput.replace(/[áàâãä]/gi,"a").replace(/[éèêë]/gi,"e").replace(/[íìîï]/gi,"i").replace(/[óòôõö]/gi,"o").replace(/[úùûü]/gi,"u")));
                 if (matchedKeyBairro && deliveryFeesBrutus.hasOwnProperty(matchedKeyBairro)) { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Bairro clarificado '${matchedKeyBairro}' encontrado com taxa. Mudando estado para 'aguardando_forma_pagamento'.`);
-                    userData.bairro = matchedKeyBairro; userData.deliveryFee = deliveryFeesBrutus[matchedKeyBairro]; userData.state = 'aguardando_forma_pagamento'; const { subtotal } = formatCartForDisplay(userData.cart); const totalComTaxa = subtotal + userData.deliveryFee; aiInstruction = `Carlos, bairro confirmado: ${userData.bairro} para o cliente (${remoteJid}). Taxa R$ ${userData.deliveryFee.toFixed(2)}. Subtotal R$ ${subtotal.toFixed(2)}, total R$ ${totalComTaxa.toFixed(2)}. Use a frase do prompt: "Agora, para calcular a taxa de entrega... A taxa de entrega para ${userData.bairro} é R$ ${userData.deliveryFee.toFixed(2)}." e depois "Agora que tenho o bairro... correto?" e em seguida pergunte "E qual vai ser a forma de pagamento?".`; 
+                    userData.bairro = matchedKeyBairro; userData.deliveryFee = deliveryFeesBrutus[matchedKeyBairro]; userData.state = 'aguardando_forma_pagamento'; const { subtotal } = formatCartForDisplay(userData.cart); const totalComTaxa = subtotal + userData.deliveryFee; aiInstruction = `Carlos, bairro confirmado: ${userData.bairro} para o cliente (${remoteJid.split('@')[0]}). Taxa R$ ${userData.deliveryFee.toFixed(2)}. Subtotal R$ ${subtotal.toFixed(2)}, total R$ ${totalComTaxa.toFixed(2)}. Use a frase do prompt: "Agora, para calcular a taxa de entrega... A taxa de entrega para ${userData.bairro} é R$ ${userData.deliveryFee.toFixed(2)}." e depois "Agora que tenho o bairro... correto?" e em seguida pergunte "E qual vai ser a forma de pagamento?".`; 
                 } else { 
                     console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Bairro clarificado '${bairroInput}' ainda não encontrado.`);
-                    aiInstruction = `Carlos, ainda não consegui confirmar o bairro "${bairroInput}" em nossa área de entrega para o cliente (${remoteJid}). Informe que, infelizmente, não encontramos o bairro para calcular a taxa e pergunte se ele gostaria de tentar informar o bairro novamente ou se prefere retirar o pedido na loja.`; 
+                    aiInstruction = `Carlos, ainda não consegui confirmar o bairro "${bairroInput}" em nossa área de entrega para o cliente (${remoteJid.split('@')[0]}). Informe que, infelizmente, não encontramos o bairro para calcular a taxa e pergunte se ele gostaria de tentar informar o bairro novamente ou se prefere retirar o pedido na loja.`; 
                 }
                 break;
 
@@ -488,7 +487,6 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                 const pagamentoIntentDetected = await askAI(text, intentSystemPrompt, 0.1); 
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Intenção de pagamento detectada: ${pagamentoIntentDetected}`);
                 
-                // Instrução base para recapitular antes da confirmação
                 const buildResumoInstruction = (metodoPagamento) => {
                     const { message: cartSummary, subtotal } = formatCartForDisplay(userData.cart);
                     let totalPedido = subtotal;
@@ -511,7 +509,7 @@ Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou
                     userData.paymentMethod = 'PIX'; 
                     userData.state = 'confirmando_pedido_final'; 
                     const resumoPix = buildResumoInstruction('PIX');
-                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu PIX. Use a frase do seu prompt de conhecimento para explicar sobre o QR Code do PIX na maquininha na hora da entrega. Em seguida, apresente o seguinte resumo e peça a confirmação final: ${resumoPix}`;
+                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu PIX. Explique sobre o QR Code na maquininha conforme o prompt. Em seguida, apresente o seguinte resumo e peça a confirmação final com "sim" ou "não": ${resumoPix}`;
                 } else if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_DINHEIRO') { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu DINHEIRO. Mudando estado para 'aguardando_troco'.`); 
                     userData.paymentMethod = 'DINHEIRO'; 
@@ -532,7 +530,6 @@ Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'aguardando_troco'. Informação de troco: "${text}". Mudando para 'confirmando_pedido_final'.`);
                 userData.changeFor = text; 
                 userData.state = 'confirmando_pedido_final';
-                // Monta o resumo aqui também para a IA pedir a confirmação
                 const { message: cartSummaryTroco, subtotal: subtotalTroco } = formatCartForDisplay(userData.cart);
                 let totalPedidoTroco = subtotalTroco;
                 let tipoPedidoInfoTroco = "Retirada na loja.";
@@ -607,9 +604,25 @@ Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou
                         await sendMessageWithRetry(sock, `${ADMIN_PHONE_NUMBER}@s.whatsapp.net`, { text: adminNotification });
                     }
                     
+                    // Enviar resumo formatado para o cliente
+                    let resumoCliente = `*Seu Pedido no ${NOME_RESTAURANTE} foi Confirmado!* ✅\n\n`;
+                    resumoCliente += `${cartItemsFinal}\n`;
+                    if (userData.orderType === 'delivery') {
+                        resumoCliente += `*Tipo:* Entrega\n*Endereço:* ${userData.address || 'Não informado'} (Bairro: ${userData.bairro || 'Não informado'})\n*Taxa Entrega:* R$ ${(parseFloat(userData.deliveryFee) || 0).toFixed(2)}\n`;
+                    } else {
+                        resumoCliente += `*Tipo:* Retirada\n`;
+                    }
+                    resumoCliente += `*TOTAL DO PEDIDO:* R$ ${valorTotalPedido.toFixed(2)}\n`;
+                    resumoCliente += `*Pagamento:* ${userData.paymentMethod || 'Não informado'}`;
+                    if (userData.paymentMethod === 'DINHEIRO' && userData.changeFor) {
+                        resumoCliente += ` (Troco para: ${userData.changeFor})`;
+                    }
+                    await sendMessageWithRetry(sock, remoteJid, { text: resumoCliente });
+                    
+                    // Instrução para a mensagem de fechamento da IA
                     const tempoEstimado = userData.orderType === 'delivery' ? "em 50 minutos pra entrega" : "em 15 minutos pra retirada";
-                    if(apiErrorMessage){ aiInstruction = `Carlos, tivemos um pequeno soluço técnico interno ao registrar o pedido do cliente (${remoteJid.split('@')[0]}), mas não se preocupe, o pedido FOI CONFIRMADO e já estamos cientes para resolver! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
-                    else { aiInstruction = `Carlos, o pedido do cliente (${remoteJid.split('@')[0]}) foi confirmado! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
+                    if(apiErrorMessage){ aiInstruction = `Carlos, o pedido do cliente (${remoteJid.split('@')[0]}) foi confirmado, mas houve um probleminha ao registrá-lo no nosso sistema interno (o administrador já foi avisado). Diga ao cliente que o pedido está confirmado, que está sendo preparado, informe o tempo estimado de ${tempoEstimado}, agradeça e peça para chamar se precisar de algo.`; }
+                    else { aiInstruction = `Carlos, o pedido do cliente (${remoteJid.split('@')[0]}) foi confirmado com sucesso! Diga que o pedido está sendo preparado, informe o tempo estimado de ${tempoEstimado}, agradeça e peça para chamar se precisar de algo. Use um tom positivo e de fechamento.`; }
                     await clearUserData(remoteJid); userData = await getUserData(remoteJid);
                 } else if (generalIntent.toUpperCase() === 'CONFIRMAR_NAO') {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Pedido NÃO confirmado. Voltando para 'coletando_itens'.`);
@@ -624,7 +637,7 @@ Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou
             default:
                 console.warn(`[STATE_ERROR] User: ${remoteJid}, Estado desconhecido: ${userData.state}. Resetando para idle.`);
                 await clearUserData(remoteJid); userData = await getUserData(remoteJid);
-                aiInstruction = `Carlos, parece que nos perdemos um pouco na conversa com o cliente (${remoteJid}). Vamos recomeçar? Diga "Oiee, tudo bem? Bem vindo ao Brutus" e pergunte o que ele gostaria.`;
+                aiInstruction = `Carlos, parece que nos perdemos um pouco na conversa com o cliente (${remoteJid.split('@')[0]}). Vamos recomeçar? Diga "Oiee, tudo bem? Bem vindo ao Brutus" e pergunte o que ele gostaria.`;
                 break;
         }
 
@@ -680,8 +693,8 @@ async function startBot() {
 
             if (qr) { 
                 console.info('🔗 [QR_CODE] QR Code Recebido. Escaneie abaixo com o WhatsApp no seu celular:');
-                const qrcodeTerminal = require('qrcode-terminal');
-                qrcodeTerminal.generate(qr, { small: true }, function (qrString) {
+                // const qrcodeTerminal = require('qrcode-terminal'); // Movido para o topo do arquivo
+                qrcode.generate(qr, { small: true }, function (qrString) {
                     console.log(qrString);
                 });
             }
