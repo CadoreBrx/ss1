@@ -270,7 +270,6 @@ redisClient.connect().catch(err => console.error('❌ [REDIS_ERROR] Falha ao con
 const openai = new OpenAI({ apiKey: CHATGPT_API_KEY });
 
 function getMessageText(message) { if (message.conversation) return message.conversation; if (message.extendedTextMessage?.text) return message.extendedTextMessage.text; if (message.imageMessage?.caption) return message.imageMessage.caption; if (message.videoMessage?.caption) return message.videoMessage.caption; return ''; }
-
 async function transcreverAudio(audioBuffer) { 
     console.info("[AUDIO_TRANSCRIPTION] Tentando transcrever áudio...");
     try { 
@@ -286,7 +285,6 @@ async function transcreverAudio(audioBuffer) {
         return ''; 
     } 
 }
-
 async function sendMessageWithRetry(sock, jid, content, retries = 3) { 
     if (!sock || typeof sock.sendMessage !== 'function') { 
         console.error(`❌ [SEND_MSG_ERROR] Tentativa de enviar mensagem com 'sock' inválido para ${jid}`); 
@@ -310,7 +308,6 @@ async function sendMessageWithRetry(sock, jid, content, retries = 3) {
     } 
     return false; 
 }
-
 async function askAI(userQuestionOrInstruction, currentSystemPrompt = systemPrompt, temperature = 0.3) { 
     if (!CHATGPT_API_KEY) { 
         console.warn("⚠️ [OPENAI_WARN] CHATGPT_API_KEY não configurada. A IA não pode ser chamada."); 
@@ -320,8 +317,6 @@ async function askAI(userQuestionOrInstruction, currentSystemPrompt = systemProm
         const messages = [{ role: 'system', content: currentSystemPrompt }, { role: 'user', content: userQuestionOrInstruction }]; 
         console.info(`[OPENAI_REQUEST] Enviando para OpenAI (modelo: gpt-4o, temp: ${temperature}):`);
         console.info(`  [OPENAI_REQUEST] User Instruction: "${userQuestionOrInstruction}"`);
-        // Para debug pesado, pode descomentar o log do system prompt:
-        // console.debug(`  [OPENAI_REQUEST] System Prompt (início): ${currentSystemPrompt.substring(0, 200).replace(/\n/g, " ")}...`);
         
         const response = await openai.chat.completions.create({ model: 'gpt-4o', messages: messages, temperature: temperature }); 
         let aiResponse = response.choices?.[0]?.message?.content || ''; 
@@ -336,7 +331,6 @@ async function askAI(userQuestionOrInstruction, currentSystemPrompt = systemProm
         return `Desculpe, ${NOME_RESTAURANTE} está com uma pequena instabilidade com nosso atendente virtual Carlos. Tente novamente em alguns instantes, por favor. (Erro OpenAI)`; 
     } 
 }
-
 async function extractItemsAndPricesFromText(text) { 
     const extractionInstruction = `Analise o texto do pedido a seguir, fornecido pelo cliente do "${NOME_RESTAURANTE}". Sua base de conhecimento principal é o cardápio e as regras definidas no system prompt que você recebeu. Extraia cada item, sua quantidade e seu PREÇO UNITÁRIO conforme o cardápio. Se a quantidade não for especificada, assuma 1. Para adicionais, tente associá-los ao item principal se possível, ou liste-os separadamente. O preço do adicional deve ser o do cardápio. Responda APENAS com um array de objetos JSON, seguindo este formato: [{"item": "Nome Completo do Item", "quantidade": X, "preco_unitario": Y.YY}] Se combos forem mencionados, trate o combo como um único item com seu preço total de combo. Se nenhum item do cardápio for encontrado, retorne um array JSON vazio []. Texto do pedido do cliente: "${text}"`; 
     
@@ -391,7 +385,7 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
 
         switch (userData.state) {
             case 'idle':
-                const initialItems = await extractItemsAndPricesFromText(text); // Log já está dentro da função
+                const initialItems = await extractItemsAndPricesFromText(text);
                 if (initialItems.length > 0) {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Itens iniciais detectados. Mudando estado para 'coletando_itens'.`);
                     userData.cart.push(...initialItems);
@@ -433,16 +427,12 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                      carlosResponse = 'Claro! Nosso cardápio está aqui: https://abrir.link/cardapiobrutus\nMe diga o que mais te agrada! 😉';
                 } else { 
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Processando texto para adicionar/modificar itens.`);
-                    const additionalItems = await extractItemsAndPricesFromText(text); // Log já está dentro da função
+                    const additionalItems = await extractItemsAndPricesFromText(text);
                     if (additionalItems.length > 0) { userData.cart.push(...additionalItems); const { subtotal } = formatCartForDisplay(userData.cart); console.info(`[FLOW_LOGIC] User: ${remoteJid}, Itens adicionados. Subtotal: R$ ${subtotal.toFixed(2)}`); aiInstruction = `Carlos, adicionei ${additionalItems.map(i => `${i.quantidade}x ${i.item}`).join(', ')} ao pedido do cliente (${remoteJid}). O subtotal atual é R$ ${subtotal.toFixed(2)}. Confirme e pergunte se deseja algo mais ou prosseguir.`; }
                     else { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Nenhum item novo extraído. Pode ser pergunta.`); aiInstruction = `Carlos, o cliente (${remoteJid}) disse "${text}" enquanto montava o pedido. Se não for um item novo do cardápio, responda à pergunta dele de forma útil. Se ele parecer confuso, lembre-o que pode pedir o cardápio ou finalizar o pedido.`; }
                 }
                 break;
 
-            // ... (Logs similares para os outros cases: aguardando_tipo_pedido, aguardando_endereco, etc.)
-            // ... (No case 'confirmando_pedido_final', a lógica de envio para API já tem bons logs) ...
-
-            // Adicionando logs para os outros cases para seguir o padrão
             case 'aguardando_tipo_pedido':
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'aguardando_tipo_pedido'.`);
                 if (generalIntent.toUpperCase() === 'ESCOLHER_ENTREGA' || text.toLowerCase().includes('entrega')) {
@@ -497,24 +487,72 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'aguardando_forma_pagamento'. Texto: "${text}"`);
                 const pagamentoIntentDetected = await askAI(text, intentSystemPrompt, 0.1); 
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Intenção de pagamento detectada: ${pagamentoIntentDetected}`);
-                if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_PIX') { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu PIX. Mudando estado para 'confirmando_pedido_final'.`); userData.paymentMethod = 'PIX'; userData.state = 'confirmando_pedido_final'; aiInstruction = `Carlos, cliente (${remoteJid}) escolheu PIX. Use a frase do seu prompt de conhecimento para explicar sobre o QR Code do PIX na maquininha na hora da entrega. Em seguida, recapitule o pedido completo (itens, valor total com taxa se houver, tipo de pedido, endereço se entrega, forma de pagamento) e peça a confirmação final.`; }
-                else if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_DINHEIRO') { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu DINHEIRO. Mudando estado para 'aguardando_troco'.`); userData.paymentMethod = 'DINHEIRO'; userData.state = 'aguardando_troco'; aiInstruction = `Carlos, cliente (${remoteJid}) escolheu dinheiro. Use a frase do seu prompt de conhecimento: "Vai precisar de troco? Se sim, troco pra quanto?".`; }
-                else if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_CARTAO') { console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu CARTÃO. Mudando estado para 'confirmando_pedido_final'.`); userData.paymentMethod = 'CARTAO'; userData.state = 'confirmando_pedido_final'; aiInstruction = `Carlos, cliente (${remoteJid}) escolheu pagar com cartão. Recapitule o pedido completo (itens, valor total com taxa se houver, tipo de pedido, endereço se entrega, forma de pagamento) e peça a confirmação final.`; }
-                else { console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Forma de pagamento não entendida.`); aiInstruction = `Carlos, não entendi bem a forma de pagamento ("${text}") do cliente (${remoteJid}). Poderia perguntar novamente? Ofereça PIX, Dinheiro ou Cartão como opções.`; }
+                
+                // Instrução base para recapitular antes da confirmação
+                const buildResumoInstruction = (metodoPagamento) => {
+                    const { message: cartSummary, subtotal } = formatCartForDisplay(userData.cart);
+                    let totalPedido = subtotal;
+                    let tipoPedidoInfo = "Retirada na loja.";
+                    if (userData.orderType === 'delivery') {
+                        totalPedido += (parseFloat(userData.deliveryFee) || 0);
+                        tipoPedidoInfo = `Entrega em: ${userData.address || 'N/A'} (Bairro: ${userData.bairro || 'N/A'}, Taxa: R$ ${(parseFloat(userData.deliveryFee) || 0).toFixed(2)})`;
+                    }
+                    return `Carlos, o cliente (${remoteJid.split('@')[0]}) escolheu pagar com ${metodoPagamento}. 
+O pedido é:
+${cartSummary}
+${tipoPedidoInfo}
+*TOTAL:* R$ ${totalPedido.toFixed(2)}
+*Pagamento:* ${metodoPagamento}.
+Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou "não" se quiser alterar algo.`;
+                };
+
+                if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_PIX') { 
+                    console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu PIX. Mudando estado para 'confirmando_pedido_final'.`); 
+                    userData.paymentMethod = 'PIX'; 
+                    userData.state = 'confirmando_pedido_final'; 
+                    const resumoPix = buildResumoInstruction('PIX');
+                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu PIX. Use a frase do seu prompt de conhecimento para explicar sobre o QR Code do PIX na maquininha na hora da entrega. Em seguida, apresente o seguinte resumo e peça a confirmação final: ${resumoPix}`;
+                } else if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_DINHEIRO') { 
+                    console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu DINHEIRO. Mudando estado para 'aguardando_troco'.`); 
+                    userData.paymentMethod = 'DINHEIRO'; 
+                    userData.state = 'aguardando_troco'; 
+                    aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) escolheu dinheiro. Use a frase do seu prompt de conhecimento: "Vai precisar de troco? Se sim, troco pra quanto?".`; 
+                } else if (pagamentoIntentDetected.toUpperCase() === 'INFORMAR_PAGAMENTO_CARTAO') { 
+                    console.info(`[FLOW_LOGIC] User: ${remoteJid}, Escolheu CARTÃO. Mudando estado para 'confirmando_pedido_final'.`); 
+                    userData.paymentMethod = 'CARTAO'; 
+                    userData.state = 'confirmando_pedido_final'; 
+                    aiInstruction = buildResumoInstruction('CARTÃO');
+                } else { 
+                    console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Forma de pagamento não entendida.`); 
+                    aiInstruction = `Carlos, não entendi bem a forma de pagamento ("${text}") do cliente (${remoteJid.split('@')[0]}). Poderia perguntar novamente? Ofereça PIX, Dinheiro ou Cartão como opções.`; 
+                }
                 break;
 
             case 'aguardando_troco':
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'aguardando_troco'. Informação de troco: "${text}". Mudando para 'confirmando_pedido_final'.`);
-                userData.changeFor = text; userData.state = 'confirmando_pedido_final';
-                aiInstruction = `Carlos, cliente (${remoteJid}) informou sobre o troco: "${userData.changeFor}". Agora, recapitule todo o pedido (itens, endereço se entrega, valor total, forma de pagamento e troco) e peça a confirmação final.`;
+                userData.changeFor = text; 
+                userData.state = 'confirmando_pedido_final';
+                // Monta o resumo aqui também para a IA pedir a confirmação
+                const { message: cartSummaryTroco, subtotal: subtotalTroco } = formatCartForDisplay(userData.cart);
+                let totalPedidoTroco = subtotalTroco;
+                let tipoPedidoInfoTroco = "Retirada na loja.";
+                if (userData.orderType === 'delivery') {
+                    totalPedidoTroco += (parseFloat(userData.deliveryFee) || 0);
+                    tipoPedidoInfoTroco = `Entrega em: ${userData.address || 'N/A'} (Bairro: ${userData.bairro || 'N/A'}, Taxa: R$ ${(parseFloat(userData.deliveryFee) || 0).toFixed(2)})`;
+                }
+                aiInstruction = `Carlos, cliente (${remoteJid.split('@')[0]}) informou sobre o troco: "${userData.changeFor}". 
+O pedido é:
+${cartSummaryTroco}
+${tipoPedidoInfoTroco}
+*TOTAL:* R$ ${totalPedidoTroco.toFixed(2)}
+*Pagamento:* DINHEIRO (Troco para: ${userData.changeFor}).
+Por favor, peça ao cliente para confirmar com "sim" para finalizar o pedido, ou "não" se quiser alterar algo.`;
                 break;
 
             case 'confirmando_pedido_final':
                 console.info(`[FLOW_LOGIC] User: ${remoteJid}, Estado 'confirmando_pedido_final'. Resposta do cliente: "${text}"`);
                 if (generalIntent.toUpperCase() === 'CONFIRMAR_SIM') {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Pedido CONFIRMADO. Processando envio para API e notificação.`);
-                    // ... (a lógica de envio para API já tem console.logs detalhados) ...
-                    // (O código para enviar para API, notificar admin, e responder ao cliente permanece o mesmo)
                     const { message: cartItemsFinal, subtotal: subtotalFinal } = formatCartForDisplay(userData.cart);
                     let valorTotalPedido;
                     let pedidoResumoParaAdmin = `🔔 *Novo Pedido ${NOME_RESTAURANTE}!* 🔥\n*Cliente:* ${remoteJid.split('@')[0]}\n*Nome Cliente (Perfil):* ${originalMessage.pushName || 'N/A'}\n\n${cartItemsFinal}\n`;
@@ -526,7 +564,7 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                     
                     console.log(`\n\n--- PEDIDO PRESTES A SER ENVIADO PARA API ---\n${pedidoResumoParaAdmin}\n----------------------------------\n\n`);
                     
-                    const orderPayloadToAPI = { /* ... seu payload ... */
+                    const orderPayloadToAPI = {
                         customer_phone: remoteJid.split('@')[0], 
                         customer_name: originalMessage.pushName || remoteJid.split('@')[0], 
                         items: userData.cart.map(item => ({ item_name: item.item, quantity: parseInt(item.quantidade) || 1, unit_price: parseFloat(item.preco_unitario) || 0 })),
@@ -551,7 +589,7 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                              pedidoResumoParaAdmin += `\n*ID Pedido (Sistema):* ${apiOrderId}`;
                              console.info(`[API_ORDER_ID] User: ${remoteJid}, ID do Pedido na API: ${apiOrderId}`);
                         } else {
-                            console.warn("[API_ORDER_WARN] User: ${remoteJid}, API não retornou ID de pedido esperado. Resposta:", apiResponse.data);
+                            console.warn(`[API_ORDER_WARN] User: ${remoteJid}, API não retornou ID de pedido esperado. Resposta:`, apiResponse.data);
                             pedidoResumoParaAdmin += `\n*ID Pedido (Sistema):* Verifique o painel (resposta da API não padrão).`;
                         }
                     } catch (apiError) {
@@ -570,16 +608,16 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
                     }
                     
                     const tempoEstimado = userData.orderType === 'delivery' ? "em 50 minutos pra entrega" : "em 15 minutos pra retirada";
-                    if(apiErrorMessage){ aiInstruction = `Carlos, tivemos um pequeno soluço técnico interno ao registrar o pedido do cliente (${remoteJid}), mas não se preocupe, o pedido FOI CONFIRMADO e já estamos cientes para resolver! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
-                    else { aiInstruction = `Carlos, o pedido do cliente (${remoteJid}) foi confirmado! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
-                    await clearUserData(remoteJid); userData = await getUserData(remoteJid); // Reseta para o próximo pedido
+                    if(apiErrorMessage){ aiInstruction = `Carlos, tivemos um pequeno soluço técnico interno ao registrar o pedido do cliente (${remoteJid.split('@')[0]}), mas não se preocupe, o pedido FOI CONFIRMADO e já estamos cientes para resolver! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
+                    else { aiInstruction = `Carlos, o pedido do cliente (${remoteJid.split('@')[0]}) foi confirmado! Use a frase de fechamento do seu prompt de conhecimento: "Perfeito! Estamos preparando o pedido. Vai ficar pronto ${tempoEstimado}. Qualquer coisa, é só chamar!".`; }
+                    await clearUserData(remoteJid); userData = await getUserData(remoteJid);
                 } else if (generalIntent.toUpperCase() === 'CONFIRMAR_NAO') {
                     console.info(`[FLOW_LOGIC] User: ${remoteJid}, Pedido NÃO confirmado. Voltando para 'coletando_itens'.`);
                     userData.state = 'coletando_itens'; 
-                    aiInstruction = `Carlos, o cliente (${remoteJid}) não confirmou o pedido. Diga que o pedido não foi confirmado e que ele pode alterar os itens ou o que mais desejar. Use a frase do seu prompt de conhecimento: "Claro! O que você gostaria de trocar ou mudar no pedido?" ou similar.`;
+                    aiInstruction = `Carlos, o cliente (${remoteJid.split('@')[0]}) não confirmou o pedido. Diga que o pedido não foi confirmado e que ele pode alterar os itens ou o que mais desejar. Use a frase do seu prompt de conhecimento: "Claro! O que você gostaria de trocar ou mudar no pedido?" ou similar.`;
                 } else { 
-                    console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Confirmação final não entendida: "${text}".`);
-                    aiInstruction = `Carlos, não entendi a confirmação do cliente (${remoteJid}) ("${text}"). Peça para ele confirmar com "sim" ou "não", por favor, para o pedido ser finalizado.`; 
+                    console.warn(`[FLOW_LOGIC_WARN] User: ${remoteJid}, Confirmação final não entendida: "${text}". Pedindo para confirmar com sim/não.`);
+                    aiInstruction = `Carlos, a resposta do cliente foi "${text}". Não entendi se é "sim" ou "não" para confirmar o pedido. Peça novamente, de forma clara, para ele confirmar o pedido com "sim" ou dizer "não" se quiser alterar algo.`; 
                 }
                 break;
             
@@ -595,7 +633,6 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
             carlosResponse = await askAI(aiInstruction, systemPrompt); 
         }
         if (carlosResponse) { 
-            // sendMessageWithRetry já loga o envio
             await sendMessageWithRetry(sock, remoteJid, { text: carlosResponse }); 
             userData.lastBotMessage = carlosResponse; 
         }
@@ -606,7 +643,6 @@ async function handleMessageLogic(sock, remoteJid, text, originalMessage) {
         }
         console.info(`[HANDLE_MSG_END] User: ${remoteJid}, Processamento finalizado. Estado final salvo (se aplicável): ${userData.state}`);
         console.info(`[HANDLE_MSG_END] =========================================================\n`);
-
 
     } catch (error) {
         console.error(`❌ [HANDLE_MSG_EXCEPTION] Erro GERAL em handleMessageLogic para ${remoteJid} no estado ${userData.state}:`, error.message, error.stack);
@@ -631,7 +667,7 @@ async function startBot() {
             syncFullHistory: false, 
             qrTimeout: 45000, 
             browser: [`${NOME_RESTAURANTE} Bot (Facility.Ai)`, 'Chrome', '1.0.0'],
-            logger: require('pino')({ level: 'warn' }) // 'info' ou 'debug' para MUITO mais logs do Baileys
+            logger: require('pino')({ level: 'warn' })
         });
         console.info("[START_BOT] Socket Baileys criado.");
 
@@ -646,7 +682,7 @@ async function startBot() {
                 console.info('🔗 [QR_CODE] QR Code Recebido. Escaneie abaixo com o WhatsApp no seu celular:');
                 const qrcodeTerminal = require('qrcode-terminal');
                 qrcodeTerminal.generate(qr, { small: true }, function (qrString) {
-                    console.log(qrString); // Imprime o QR Code como texto no terminal
+                    console.log(qrString);
                 });
             }
             if (connection === 'close') {
@@ -697,18 +733,14 @@ async function startBot() {
         console.info("[EVENT_HANDLER] Listener para 'connection.update' configurado.");
 
         sock.ev.on('messages.upsert', async (upsert) => {
-            // console.debug("[MESSAGE_UPSERT_RAW]", JSON.stringify(upsert, null, 2)); // Log MUITO verboso
             try {
                 const msg = upsert.messages[0];
-                if (!msg.message || upsert.type !== 'notify' || msg.key.id?.length < 20 ) { 
-                    // console.debug("[MESSAGE_IGNORE] Mensagem ignorada (tipo, sem conteúdo ou chave curta):", msg?.key?.id);
-                    return; 
-                }
+                if (!msg.message || upsert.type !== 'notify' || msg.key.id?.length < 20 ) { return; }
 
                 const remoteJid = msg.key.remoteJid || '';
                 const fromMe = msg.key.fromMe === true;
                 const senderIsAdmin = ADMIN_PHONE_NUMBER && remoteJid === `${ADMIN_PHONE_NUMBER}@s.whatsapp.net`;
-                const pushName = msg.pushName || "Desconhecido"; // Nome do perfil do remetente
+                const pushName = msg.pushName || "Desconhecido";
 
                 console.info(`[MESSAGE_RECEIVED] De: ${pushName} (${remoteJid}), FromMe: ${fromMe}, Admin: ${senderIsAdmin}`);
 
@@ -743,7 +775,7 @@ async function startBot() {
                     const numberToResetCmd = text.substring(13).trim().replace(/\D/g, '');
                     const numberToResetJid = numberToResetCmd + "@s.whatsapp.net";
                     console.info(`[ADMIN_CMD] User: ${remoteJid}, Comando recebido: resetar usuário ${numberToResetJid}`);
-                    if (numberToResetCmd.length >= 10 && numberToResetCmd.length <= 13) { // Validação básica de tamanho do número
+                    if (numberToResetCmd.length >= 10 && numberToResetCmd.length <= 13) { 
                          await clearUserData(numberToResetJid);
                          console.info(`[ADMIN_CMD_SUCCESS] Dados do usuário ${numberToResetJid} resetados pelo administrador.`);
                          await sendMessageWithRetry(sock, remoteJid, {text: `Dados do usuário ${numberToResetCmd} foram resetados.`});
@@ -758,31 +790,14 @@ async function startBot() {
                     console.info(`[AUDIO_MSG_RECEIVED] User: ${remoteJid}, Recebeu mensagem de áudio.`);
                     try {
                         const audioBuffer = await downloadMediaMessage(msg, 'buffer', {}, { reuploadRequest: sock.updateMediaMessage });
-                        if (audioBuffer) { 
-                            const audioText = await transcreverAudio(audioBuffer); // Log já está dentro da função
-                            if (audioText) { 
-                                text = audioText; 
-                                await sendMessageWithRetry(sock, remoteJid, { text: `Carlos ouviu (Transcrição): "_${text}_"` }); 
-                            } else { 
-                                console.warn(`[AUDIO_TRANSCRIPTION_EMPTY] User: ${remoteJid}, Transcrição de áudio vazia.`);
-                                await sendMessageWithRetry(sock, remoteJid, { text: 'Desculpe, Carlos não conseguiu entender bem o áudio. Poderia tentar de novo ou digitar?' }); return; 
-                            }
-                        } else { 
-                            console.warn(`[AUDIO_DOWNLOAD_FAIL] User: ${remoteJid}, Falha ao baixar buffer de áudio.`);
-                            await sendMessageWithRetry(sock, remoteJid, { text: 'Não consegui baixar o áudio. Pode tentar novamente?' }); return; 
-                        }
-                    } catch (audioError) { 
-                        console.error("❌ [AUDIO_PROCESSING_ERROR] Erro ao processar áudio:", audioError.message, audioError.stack); 
-                        await sendMessageWithRetry(sock, remoteJid, { text: 'Tive um probleminha para processar seu áudio. Pode digitar, por favor?' }); return; 
-                    }
+                        if (audioBuffer) { const audioText = await transcreverAudio(audioBuffer); if (audioText) { text = audioText; await sendMessageWithRetry(sock, remoteJid, { text: `Carlos ouviu (Transcrição): "_${text}_"` }); } else { console.warn(`[AUDIO_TRANSCRIPTION_EMPTY] User: ${remoteJid}, Transcrição de áudio vazia.`); await sendMessageWithRetry(sock, remoteJid, { text: 'Desculpe, Carlos não conseguiu entender bem o áudio. Poderia tentar de novo ou digitar?' }); return; }
+                        } else { console.warn(`[AUDIO_DOWNLOAD_FAIL] User: ${remoteJid}, Falha ao baixar buffer de áudio.`); await sendMessageWithRetry(sock, remoteJid, { text: 'Não consegui baixar o áudio. Pode tentar novamente?' }); return; }
+                    } catch (audioError) { console.error("❌ [AUDIO_PROCESSING_ERROR] Erro ao processar áudio:", audioError.message, audioError.stack); await sendMessageWithRetry(sock, remoteJid, { text: 'Tive um probleminha para processar seu áudio. Pode digitar, por favor?' }); return; }
                 }
                 
-                if (!text && !msg.message.listResponseMessage && !msg.message.buttonsResponseMessage) { 
-                    console.info(`[EMPTY_MSG_IGNORE] User: ${remoteJid}, Mensagem sem conteúdo de texto processável.`); 
-                    return; 
-                }
+                if (!text && !msg.message.listResponseMessage && !msg.message.buttonsResponseMessage) { console.info(`[EMPTY_MSG_IGNORE] User: ${remoteJid}, Mensagem sem conteúdo de texto processável.`); return; }
 
-                await handleMessageLogic(sock, remoteJid, text, msg); // Log já está dentro desta função
+                await handleMessageLogic(sock, remoteJid, text, msg);
 
             } catch (error) {
                 console.error('❌ [MESSAGES_UPSERT_ERROR] Erro GERAL no processamento de mensagens (messages.upsert):', error.message, error.stack);
